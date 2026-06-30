@@ -49,17 +49,44 @@ public class NarudzbaService
     public override async Task<NarudzbaResponse> InsertAsync(NarudzbaInsertRequest request)
     {
         var korisnikExists = await Context.Korisniks.AnyAsync(x => x.KorisnikId == request.KorisnikId);
+
         if (!korisnikExists)
             throw new ClientException("Korisnik ne postoji.");
 
         var statusExists = await Context.StatusNarudzbes.AnyAsync(x => x.StatusNarudzbeId == request.StatusNarudzbeId);
+
         if (!statusExists)
             throw new ClientException("Status narudžbe ne postoji.");
 
         var entity = Mapper.Map<Narudzba>(request);
+
         entity.DatumNarudzbe = DateTime.UtcNow;
+        entity.UkupnaCijena = 0;
 
         Context.Narudzbas.Add(entity);
+        await Context.SaveChangesAsync();
+
+        return Mapper.Map<NarudzbaResponse>(entity);
+    }
+
+    public override async Task<NarudzbaResponse?> UpdateAsync(int id, NarudzbaUpdateRequest request)
+    {
+        var entity = await Context.Narudzbas.FindAsync(id);
+
+        if (entity == null)
+            return default;
+
+        var statusExists = await Context.StatusNarudzbes.AnyAsync(x => x.StatusNarudzbeId == request.StatusNarudzbeId);
+
+        if (!statusExists)
+            throw new ClientException("Status narudžbe ne postoji.");
+
+        entity.StatusNarudzbeId = request.StatusNarudzbeId;
+        entity.AdresaDostave = request.AdresaDostave;
+        entity.OdobrioKorisnikId = request.OdobrioKorisnikId;
+        entity.RazlogOtkazivanja = request.RazlogOtkazivanja;
+        entity.DatumPromjeneStatusa = DateTime.UtcNow;
+
         await Context.SaveChangesAsync();
 
         return Mapper.Map<NarudzbaResponse>(entity);

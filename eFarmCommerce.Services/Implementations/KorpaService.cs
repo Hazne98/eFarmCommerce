@@ -31,16 +31,24 @@ public class KorpaService
 
     public override async Task<KorpaResponse> InsertAsync(KorpaInsertRequest request)
     {
-        var korisnikExists = await Context.Korisniks.AnyAsync(x => x.KorisnikId == request.KorisnikId);
+        var korisnikExists = await Context.Korisniks
+            .AnyAsync(x => x.KorisnikId == request.KorisnikId);
 
         if (!korisnikExists)
             throw new ClientException("Korisnik ne postoji.");
 
-        var korpaExists = await Context.Korpas.AnyAsync(x => x.KorisnikId == request.KorisnikId);
+        var korpaExists = await Context.Korpas
+            .AnyAsync(x => x.KorisnikId == request.KorisnikId);
 
         if (korpaExists)
             throw new ClientException("Korisnik već ima kreiranu korpu.");
 
-        return await base.InsertAsync(request);
+        var entity = Mapper.Map<Korpa>(request);
+        entity.DatumKreiranja = DateTime.UtcNow;
+
+        Context.Korpas.Add(entity);
+        await Context.SaveChangesAsync();
+
+        return Mapper.Map<KorpaResponse>(entity);
     }
 }

@@ -21,7 +21,9 @@ public class KorpaStavkaService
 
     protected override IQueryable<KorpaStavka> AddFilter(IQueryable<KorpaStavka> query, KorpaStavkaSearchObject search)
     {
-        query = query.Include(x => x.Proizvod);
+        query = query
+            .Include(x => x.Korpa)
+            .Include(x => x.Proizvod);
 
         if (search.KorpaId.HasValue)
             query = query.Where(x => x.KorpaId == search.KorpaId.Value);
@@ -37,15 +39,20 @@ public class KorpaStavkaService
 
     public override async Task<KorpaStavkaResponse> InsertAsync(KorpaStavkaInsertRequest request)
     {
-        var korpaExists = await Context.Korpas.AnyAsync(x => x.KorpaId == request.KorpaId);
+        var korpaExists = await Context.Korpas
+            .AnyAsync(x => x.KorpaId == request.KorpaId);
 
         if (!korpaExists)
             throw new ClientException("Korpa ne postoji.");
 
-        var proizvod = await Context.Proizvods.FindAsync(request.ProizvodId);
+        var proizvod = await Context.Proizvods
+            .FirstOrDefaultAsync(x => x.ProizvodId == request.ProizvodId && x.Aktivan);
 
         if (proizvod == null)
-            throw new ClientException("Proizvod ne postoji.");
+            throw new ClientException("Proizvod ne postoji ili nije aktivan.");
+
+        if (request.Kolicina <= 0)
+            throw new ClientException("Količina mora biti veća od 0.");
 
         if (proizvod.KolicinaNaStanju < request.Kolicina)
             throw new ClientException("Nema dovoljno proizvoda na stanju.");
@@ -55,10 +62,12 @@ public class KorpaStavkaService
 
         if (existingItem != null)
         {
-            existingItem.Kolicina += request.Kolicina;
+            var novaKolicina = existingItem.Kolicina + request.Kolicina;
 
-            if (existingItem.Kolicina > proizvod.KolicinaNaStanju)
+            if (novaKolicina > proizvod.KolicinaNaStanju)
                 throw new ClientException("Nema dovoljno proizvoda na stanju.");
+
+            existingItem.Kolicina = novaKolicina;
 
             await Context.SaveChangesAsync();
 
@@ -70,12 +79,16 @@ public class KorpaStavkaService
 
     public override async Task<KorpaStavkaResponse?> UpdateAsync(int id, KorpaStavkaUpdateRequest request)
     {
-        var proizvod = await Context.Proizvods.FindAsync(request.ProizvodId);
+        if (request.Kolicina <= 0)
+            throw new ClientException("Količina mora biti veća od 0.");
+
+        var proizvod = await Context.Proizvods
+            .FirstOrDefaultAsync(x => x.ProizvodId == request.ProizvodId && x.Aktivan);
 
         if (proizvod == null)
-            throw new ClientException("Proizvod ne postoji.");
+            throw new ClientException("Proizvod ne postoji ili nije aktivan.");
 
-        if (proizvod.KolicinaNaStanju < request.Kolicina)
+        if (request.Kolicina > proizvod.KolicinaNaStanju)
             throw new ClientException("Nema dovoljno proizvoda na stanju.");
 
         return await base.UpdateAsync(id, request);
